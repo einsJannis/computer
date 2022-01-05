@@ -5,29 +5,30 @@
 16-bit address
 
 ## OP Codes
+(0): NOP
 ### Memory OP Codes
-MOV reg, reg/lit8
-LDW reg, [HL/lit16]
-STW [HL/lit16], reg
-LDA [HL/lit16]
-PSH imm8/reg
-POP reg
+(1): MOV reg, reg/lit8
+(2): LDW reg, [HL/lit16]
+(3): STW [HL/lit16], reg
+(4): LDA [HL/lit16]
+(5): PSH lit8/reg
+(6): POP reg
 ### CONTROL FLOW
-JMP lit3, [HL/lit16]
+(7): JMP lit3, [HL/lit16]
 ### Arithmetic
-ADD reg, lit8/reg
-SUB reg, lit8/reg
-AND reg, lit8/reg
-OR  reg, lit8/reg
-NOT reg
-CMP reg, lit8/reg
-SHL reg, lit8/reg
-SHR reg, lit8/reg
+(8): ADD reg, lit8/reg
+(9): SUB reg, lit8/reg
+(A): AND reg, lit8/reg
+(B): OR  reg, lit8/reg
+(C): INV reg
+(D): CMP reg, lit8/reg
+(E): SHL reg, lit8/reg
+(F): SHR reg, lit8/reg
 
 ## OP Format
 |OPC |F|reg|            |pddng|reg|            |lit8    |                            |lit16            |
-|    | |lit| when F = 0 |     |reg| when F = 1 |        | when OPC = LDW&F|STW&F|LDA |lit8    |lit8    |
-|XXXX|X|XXX|            |XXXXX|reg|            |XXXXXXXX|                            |XXXXXXXX|XXXXXXXX|
+|    | |lit| when F = 0 |     |   | when F = 1 |        | when OPC = LDW&F|STW&F|LDA |lit8    |lit8    |
+|XXXX|X|XXX|            |     |XXX|            |XXXXXXXX|                            |XXXXXXXX|XXXXXXXX|
 
 ## Register
 reg0 DATA
@@ -39,6 +40,7 @@ pc_h HIGH_BYTE
 pc_l HIGH_BYTE
 flag FLAG
   CARRY
+  BORROW
   OVERFLOW
   LESS
   EQUAL
