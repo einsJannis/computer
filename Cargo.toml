@@ -1,0 +1,3 @@
+[workspace]
+members=["computer_emulator", "assembler"]
+
