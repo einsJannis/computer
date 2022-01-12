@@ -1,7 +1,9 @@
 use core::panicking::panic;
 use std::borrow::Borrow;
-use std::ops::{Add, Shl};
+use std::ops::{Add, Index, Shl};
 use std::rc::Rc;
+use regex::Regex;
+use crate::MacroValue::Value;
 
 fn main() {
 }
@@ -18,6 +20,35 @@ enum Register {
 }
 
 impl Register {
+    fn parse(content: &str, &mut i: usize) -> Register {
+        let result = if Regex::new("reg[0-7]]").unwrap().is_match_at(content, i) {
+            i += 4;
+            Register::NUMBERED(content.index(i - 1).into())
+        } else if content.matches_at(i, "high") {
+            i += 4;
+            Register::HIGH
+        } else if content.matches_at(i, "low") {
+            i += 3;
+            Register::LOW
+        } else if content.matches_at(i, "pc_high") {
+            i += 7;
+            Register::PC_HIGH
+        } else if content.matches_at(i, "pc_low") {
+            i += 6;
+            Register::PC_LOW
+        } else if content.matches_at(i, "stack_ptr") {
+            i += 9;
+            Register::STACK_PTR
+        } else if content.matches_at(i, "flag") {
+            i += 4;
+            Register::FLAG
+        } else { panic!() };
+        if !(content.matches_at(i, " ") || content.matches_at(i, "\n")) {
+            panic!()
+        }
+        i += 1;
+        result
+    }
     fn code(&self) -> u8 {
         match self {
             Register::NUMBERED(n) => n.clone(),
@@ -38,6 +69,9 @@ enum Value {
 }
 
 impl Value {
+    fn parse(content: &str, &mut i: usize) -> Value {
+        todo!()
+    }
     fn code(&self) -> u8 {
         match self {
             Value::Register(reg) => reg.code(),
@@ -53,6 +87,7 @@ enum AddressValue {
 }
 
 impl AddressValue {
+    fn parse(content: &str, &mut i: usize) -> AddressValue { todo!() }
     fn value(&self, program: &AssemblyProgram) -> u16 {
         match self {
             AddressValue::Literal(v) => v.clone(),
@@ -82,6 +117,14 @@ enum Address {
     Value(AddressValue)
 }
 
+impl Address {
+    fn parse(content: &str, &mut i: usize) -> Address {
+        if content.matches_at(i, "\n") { Address::HL } else {
+            Address::Value(AddressValue::parse(content, i))
+        }
+    }
+}
+
 #[derive(Clone)]
 enum Flag {
     NUMBERED(u8),
@@ -94,6 +137,32 @@ enum Flag {
 }
 
 impl Flag {
+    fn parse(content: &str, &mut i: usize) -> Flag {
+        let result = if Regex::new("flag[0-7]")?.is_match_at(content, i) {
+            i += 5;
+            Flag::NUMBERED(content.index(i - 1).into())
+        } else if content.matches_at(i, "halt") {
+            i += 4;
+            Flag::HALT
+        } else if content.matches_at(i, "carry") {
+            i += 5;
+            Flag::CARRY
+        } else if content.matches_at(i, "borrow") {
+            i += 6;
+            Flag::BORROW
+        } else if content.matches_at(i, "overflow") {
+            i += 8;
+            Flag::OVERFLOW
+        } else if content.matches_at(i, "less") {
+            i += 4;
+            Flag::LESS
+        } else if content.matches_at(i, "equal") {
+            i += 5;
+            Flag::EQUAL
+        } else { panic!() };
+        i += 1;
+        result
+    }
     fn code(&self) -> u8 {
         match self {
             Flag::NUMBERED(n) => n.clone(),
@@ -552,7 +621,68 @@ struct PartialAssemblyProgram {
     instruction_blocks: Vec<InstructionContainer>
 }
 
+trait MatchesAt {
+    fn matches_at(&self, offset: usize, with: &Self) {}
+}
+impl MatchesAt for str {
+    fn matches_at(&self, offset: usize, with: &Self) -> bool {
+        let selfb = self.as_bytes();
+        let withb = self.as_bytes();
+        for i in 0..withb.len() {
+            if selfb[offset + i] != withb[i] {
+                return false
+            }
+        }
+        return true
+    }
+}
+
 impl PartialAssemblyProgram {
+    fn parse(content: &str) -> PartialAssemblyProgram {
+        let mut i = 0;
+        let mut instructions: Vec<InstructionContainer> = Vec::new();
+        loop {
+            if content.matches_at(i, "NOP") {
+                i += 4;
+                instructions += InstructionContainer::Literal(Instruction::NOP)
+            } else if content.matches_at(i, "MOV ") {
+                i += 4;
+                let register = Register::parse(content, i);
+                let value = Value::parse(content, i);
+                instructions += InstructionContainer::Literal(Instruction::MOV(register, value))
+            } else if content.matches_at(i, "LDW ") {
+                i += 4;
+                let register = Register::parse(content, i);
+                let address = Address::parse(content, i);
+                instructions += InstructionContainer::Literal(Instruction::LDW(register, address))
+            } else if content.matches_at(i, "STW ") {
+                i += 4;
+                let register = Register::parse(content, i);
+                let address = Address::parse(content, i);
+                instructions += InstructionContainer::Literal(Instruction::LDW(register, address))
+            } else if content.matches_at(i, "LDA ") {
+                i += 4;
+                let address = if content.matches_at(i, "\n") { Address::HL } else {
+                    Address::Value(AddressValue::parse(content, i))
+                };
+                instructions += InstructionContainer::Literal(Instruction::LDA(address))
+            } else if content.matches_at(i, "PSH ") {
+                i += 4;
+                let value = Value::parse(content, i);
+                instructions += InstructionContainer::Literal(Instruction::PSH(value))
+            } else if content.matches_at(i, "POP ") {
+                i += 4;
+                let register = Register::parse(content, i);
+                instructions += InstructionContainer::Literal(Instruction::POP(value))
+            } else if content.matches_at(i, "JMP ") {
+                i += 4;
+                let flag = Flag::parse(content, i);
+                let address =
+                instructions += InstructionContainer::Literal(Instruction::JMP())
+            }
+            if content.matches_at(i, "\n") { i += 1; } else { panic!() }
+        }
+    }
     fn complete(self) -> AssemblyProgram {
         AssemblyProgram { instructions: self.instructions.iter().map(|it| it.complete(self)).collect() }
     }
