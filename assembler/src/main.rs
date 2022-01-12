@@ -58,8 +58,11 @@ impl AddressValue {
             AddressValue::Literal(v) => v.clone(),
             AddressValue::Label(name) => {
                 let mut counter = 0;
-                for i in 0..index {
-                    counter += blocks[i].size() as u16;
+                for instruction in program.instructions {
+                    if let Instruction::LABEL(lname) = instruction {
+                        if name == lname { break }
+                    }
+                    counter += instruction.size()
                 }
                 counter
             }
@@ -106,6 +109,7 @@ impl Flag {
 
 #[derive(Clone)]
 enum Instruction {
+    LABEL(String),
     NOP,
     MOV(Register, Value),
     LDW(Register, Address),
@@ -126,6 +130,7 @@ enum Instruction {
 impl Instruction {
     fn code(&self) -> u8 {
         match self {
+            Instruction::LABEL(_)  => panic!(),
             Instruction::NOP       => 0x0,
             Instruction::MOV(_, _) => 0x1,
             Instruction::LDW(_, _) => 0x2,
@@ -174,6 +179,7 @@ impl Instruction {
     }
     pub fn bytes(&self, program: &AssemblyProgram) -> &[u8] {
         &match self {
+            Instruction::LABEL(_) => [],
             Instruction::NOP => [0],
             Instruction::MOV(reg, value) => {
                 [self.code() | self.flag() | reg.code(), value.code()]
@@ -227,6 +233,7 @@ impl Instruction {
     }
     const fn size(&self) -> usize {
         match self {
+            Instruction::LABEL(_) => 0,
             Instruction::NOP => 1,
             Instruction::MOV(_, _) => 2,
             Instruction::LDW(_, v) => match v {
@@ -262,34 +269,12 @@ impl Instruction {
     }
 }
 
-struct InstructionBlock {
-    name: String,
-    instructions: Vec<Instruction>
-}
-
-impl InstructionBlock {
-    fn bytes(&self, program: &AssemblyProgram) -> &[u8] {
-        let mut result = vec![];
-        for instruction in self.instructions {
-            result += instruction.bytes(program)
-        }
-        result.concat().as_slice()
-    }
-    const fn size(&self) -> usize {
-        let mut counter = 0;
-        for instruction in self.instructions {
-            counter += instruction.size()
-        }
-        return counter;
-    }
-}
-
-struct AssemblyProgram { instruction_blocks: Vec<InstructionBlock> }
+struct AssemblyProgram { instructions: Vec<Instruction> }
 
 impl AssemblyProgram {
     fn bytes(&self) -> &[u8] {
         let mut result: Vec<&[u8]> = vec![];
-        for block in self.instruction_blocks {
+        for block in self.instructions {
             result += block.bytes(self);
         }
         result.concat().as_slice()
@@ -376,6 +361,11 @@ impl MacroFlag {
     }
 }
 
+enum MacroIdentifier {
+    Identifier(String),
+    MacroArgument(String)
+}
+
 struct MacroArgumentValue<T> {
     value: T
 }
@@ -398,6 +388,7 @@ impl MacroArgument {
 enum MacroInstruction {
     MacroArgument(String),
     MacroCall(String, Vec<MacroArgument>),
+    LABEL(MacroIdentifier),
     NOP,
     MOV(MacroRegister, MacroValue),
     LDW(MacroRegister, MacroAddress),
@@ -433,6 +424,18 @@ impl MacroInstruction {
                 let m = program.macros.iter().find(|it| it.name == macro_name)?;
                 m.expand(args, program)
             }
+            MacroInstruction::LABEL(label) => {
+                match label {
+                    MacroIdentifier::Identifier(name) => vec![Instruction::LABEL(name.clone())],
+                    MacroIdentifier::MacroArgument(name) => {
+                        match MacroArgument::from_name(name.clone(), arguments, macro_d) {
+                            MacroArgument::MacroIdentifier(identifier) =>
+                                vec![Instruction::LABEL(identifier.value.clone())],
+                            _ => panic!()
+                        }
+                    }
+                }
+            },
             MacroInstruction::NOP => vec![Instruction::NOP],
             MacroInstruction::MOV(register, value) =>
                 vec![Instruction::MOV(
@@ -544,25 +547,13 @@ impl InstructionContainer {
     }
 }
 
-struct PartialInstructionBlock {
-    name: String,
-    instructions: Vec<InstructionContainer>
-}
-
-impl PartialInstructionBlock {
-    fn complete(self, program: PartialAssemblyProgram) -> InstructionBlock {
-        let (name, instructions) = self;
-        InstructionBlock { name, instructions: instructions.iter().map(|it| it.complete(program)) }
-    }
-}
-
 struct PartialAssemblyProgram {
     macros: Vec<Macro>,
-    instruction_blocks: Vec<PartialInstructionBlock>
+    instruction_blocks: Vec<InstructionContainer>
 }
 
 impl PartialAssemblyProgram {
     fn complete(self) -> AssemblyProgram {
-        AssemblyProgram { instruction_blocks: self.instruction_blocks.iter().map(|it| it.complete(self)).collect() }
+        AssemblyProgram { instructions: self.instructions.iter().map(|it| it.complete(self)).collect() }
     }
 }
