@@ -7,6 +7,7 @@ use crate::generation::IntoBytes;
 
 mod parsing;
 mod generation;
+mod macros;
 
 fn main() {
     if args().len() != 3 {
