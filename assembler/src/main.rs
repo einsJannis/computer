@@ -12,11 +12,19 @@ fn main() {
     if args().len() != 3 {
         println!("Usage: {} <asm_file> <target_file>", args()[0])
     }
-    let mut i = 0;
-    let content = read_to_string(Path::new(args()[1].to_string()))?.as_str();
-    let program = AssemblyProgram::parse(content, i).bytes();
-    write(Path::new(args()[1].to_string()), program)?;
+    compile_file(Path::new(args()[1]), Path::new(args()[2]));
     exit(0);
+}
+
+fn compile_file(input: &Path, target: &Path) {
+    let content = read_to_string(input)?.as_str();
+    let program = compile(content);
+    write(target, program);
+}
+
+fn compile(content: &str) -> &[u8] {
+    let mut i = 0;
+    AssemblyProgram::parse(content, i).bytes()
 }
 
 #[derive(Clone, Debug)]

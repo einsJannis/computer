@@ -254,14 +254,14 @@ impl IntoBytes for Instruction {
 }
 
 impl AssemblyProgram {
-    fn bytes(self) -> &[u8] {
+    pub fn bytes(self) -> &[u8] {
         let mut result: Vec<&[u8]> = vec![];
         for instruction in self.instructions {
             result += instruction.bytes(&self)
         }
         result.concat().as_slice()
     }
-    fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         let mut result = 0;
         for instruction in self.instructions {
             result += instruction.size()
