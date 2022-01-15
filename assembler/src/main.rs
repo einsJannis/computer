@@ -70,24 +70,58 @@ enum Flag {
 
 #[derive(Clone)]
 enum Instruction {
-    LABEL(String),
-    NOP,
-    MOV(Register, Value),
-    LDW(Register, Address),
-    STW(Register, Address),
-    LDA(Address),
-    PSH(Value),
-    POP(Register),
-    JMP(Flag, Address),
-    ADD(Register, Value),
-    SUB(Register, Value),
-    AND(Register, Value),
-    OR(Register, Value),
-    INV(Register),
-    CMP(Register, Value),
-    SHL(Register, Value),
-    SHR(Register, Value),
+    Label(Label),
+    NOP(NOP),
+    MOV(MOV),
+    LDW(LDW),
+    STW(STW),
+    LDA(LDA),
+    PSH(PSH),
+    POP(POP),
+    JMP(JMP),
+    ADD(ADD),
+    SUB(SUB),
+    AND(AND),
+    OR (OR ),
+    INV(INV),
+    CMP(CMP),
+    SHL(SHL),
+    SHR(SHR),
 }
+
+struct Label { name: String }
+
+struct NOP;
+
+struct MOV(Register, Value);
+
+struct LDW(Register, Value);
+
+struct STW(Register, Value);
+
+struct LDA(Address);
+
+struct PSH(Value);
+
+struct POP(Register);
+
+struct JMP(Flag, Address);
+
+struct ADD(Register, Value);
+
+struct SUB(Register, Value);
+
+struct AND(Register, Value);
+
+struct OR(Register, Value);
+
+struct INV(Register);
+
+struct CMP(Register, Value);
+
+struct SHL(Register, Value);
+
+struct SHR(Register, Value);
 
 struct AssemblyProgram {
     instructions: Vec<Instruction>

@@ -1,5 +1,7 @@
 use crate::{Address, AssemblyProgram, Flag, Instruction, Register, Value};
 
+mod parsing;
+
 enum MacroArgument {
     Instruction(ExpandableInstruction),
     Identifier(String),
@@ -22,7 +24,7 @@ impl MacroMapping<MacroArgument> {
             MacroMapping::MacroArgument(name) =>
                 macro_arguments[macro_def.argument_definitions.iter().enumerate()
                     .find(|(_, it)| it.name == name)],
-            MacroMapping::Literal(macro_mapping) => macro_mapping,
+            MacroMapping::Literal(macro_argument) => macro_argument,
         }
     }
 }
@@ -125,8 +127,8 @@ impl MacroMapping<Flag> {
 
 enum MacroInstruction {
     MacroArgument(String),
-    MacroCall(MacroMapping<String>, Vec<MacroMapping<MacroArgument>>),
-    Label(MacroMapping<String>),
+    MacroCall(String, Vec<MacroMapping<MacroArgument>>),
+    Label(String),
     NOP,
     MOV(MacroMapping<Register>, MacroMapping<Value>),
     LDW(MacroMapping<Register>, MacroMapping<Address>),
@@ -160,7 +162,7 @@ impl MacroInstruction {
             }
             MacroInstruction::MacroCall(name, arguments) => {
                 let macro_def = program.macro_definitions.iter()
-                    .find(|it| it.name == name.expand(macro_arguments, macro_def))?;
+                    .find(|it| it.name == name)?;
                 macro_def.expand(
                     arguments.iter()
                         .map(|it|it.expand(macro_arguments, macro_def))
@@ -169,7 +171,7 @@ impl MacroInstruction {
                 )
             }
             MacroInstruction::Label(identifier) =>
-                vec![Instruction::LABEL(identifier.expand(macro_arguments, macro_def))],
+                vec![Instruction::LABEL(identifier.clone())],
             MacroInstruction::NOP => vec![Instruction::NOP],
             MacroInstruction::MOV(register, value) =>
                 vec![Instruction::MOV(

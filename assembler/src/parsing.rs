@@ -3,14 +3,14 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::ops::{Add, Index, RangeBounds};
 use std::process::Output;
-use crate::{Address, AddressValue, AssemblyProgram, Flag, Instruction, Register, Value};
+use crate::{Address, AddressValue, AssemblyProgram, Flag, Instruction, Label, NOP, Register, Value};
 use crate::util::when;
 
 #[derive(Debug)]
-struct ParseError {
-    content: String,
-    index: usize,
-    name: String,
+pub struct ParseError {
+    pub content: String,
+    pub index: usize,
+    pub name: String,
 }
 
 impl Display for ParseError {
@@ -21,7 +21,7 @@ impl Display for ParseError {
 
 impl Error for ParseError {}
 
-type ParseResult<T: Parseable> = Result<T, ParseError>;
+pub type ParseResult<T: Parseable> = Result<T, ParseError>;
 
 pub trait Parseable : Sized {
     fn parse(content: &str, &mut i: usize) -> ParseResult<Self>;
@@ -197,20 +197,34 @@ impl Parseable for Flag {
     }
 }
 
+impl Parseable for Label {
+    fn parse(content: &str, &mut i: usize) -> ParseResult<String> {
+        if content[i..].starts_with("@") {
+            i += 1;
+            let last = content[i..].find(':').map_err(|_| {
+                i -= 1;
+                ParseError { content: content.to_string(), index: i, name: "Label".to_string() }
+            })?;
+            let name = content[i..last];
+            i = last + 1;
+            Ok(name)
+        } else { ParseError { content: content.to_string(), index: i, name: "Label".to_string() } }
+    }
+}
+
+impl Parseable for NOP {
+    fn parse(content: &str, &mut i: usize) -> ParseResult<Self> {
+        if content[i..].starts_with("nop \n") { }
+    }
+}
+
 impl Parseable for Instruction {
     fn parse(content: &str, &mut i: usize) -> ParseResult<Self> {
         fn error() -> ParseError {
             ParseError { content: content.to_string(), index: i, name: "Instruction".to_string() }
         }
         if content[i..].starts_with("@") {
-            i += 1;
-            let last = content[i..].find(':').map_err(|_| {
-                i -= 1;
-                error()
-            })?;
-            let name = content[i..last];
-            i = last + 1;
-            Ok(Instruction::LABEL(name))
+            parse_label_call(content, i).map(|it| Instruction::LABEL(it))
         } else if content[i..].starts_with("nop\n") {
             i += 4;
             Ok(Instruction::NOP)
