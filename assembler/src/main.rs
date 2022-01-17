@@ -1,128 +1,67 @@
-use std::env::args;
-use std::fs::{read_to_string, write};
-use std::path::Path;
-use std::process::exit;
-use crate::parsing::Parseable;
 use crate::generation::IntoBytes;
+use crate::parsing::Parsable;
+use crate::parsing::Token;
 
 mod parsing;
 mod generation;
-mod macros;
 
-fn main() {
-    if args().len() != 3 {
-        println!("Usage: {} <asm_file> <target_file>", args()[0])
-    }
-    compile_file(Path::new(args()[1]), Path::new(args()[2]));
-    exit(0);
-}
+fn main() {}
 
-fn compile_file(input: &Path, target: &Path) {
-    let content = read_to_string(input)?.as_str();
-    let program = compile(content);
-    write(target, program);
-}
+struct Register(u8);
 
-fn compile(content: &str) -> &[u8] {
-    let mut i = 0;
-    AssemblyProgram::parse(content, i).bytes()
-}
-
-#[derive(Clone, Debug)]
-enum Register {
-    NUMBERED(u8),
-    HIGH,
-    LOW,
-    PC_HIGH,
-    PC_LOW,
-    STACK_PTR,
-    FLAG
-}
-
-#[derive(Clone)]
 enum Value {
     Register(Register),
-    Literal(i8),
+    Literal(i8)
 }
 
-#[derive(Clone)]
 enum AddressValue {
     Literal(u16),
-    Label(String),
+    Label(String)
 }
 
-#[derive(Clone)]
 enum Address {
     HL,
-    Value(AddressValue)
+    Literal(AddressValue)
 }
 
-#[derive(Clone)]
-enum Flag {
-    NUMBERED(u8),
-    HALT,
-    CARRY,
-    BORROW,
-    OVERFLOW,
-    LESS,
-    EQUAL
-}
+struct Flag(u8);
 
-#[derive(Clone)]
-enum Instruction {
-    Label(Label),
-    NOP(NOP),
-    MOV(MOV),
-    LDW(LDW),
-    STW(STW),
-    LDA(LDA),
-    PSH(PSH),
-    POP(POP),
-    JMP(JMP),
-    ADD(ADD),
-    SUB(SUB),
-    AND(AND),
-    OR (OR ),
-    INV(INV),
-    CMP(CMP),
-    SHL(SHL),
-    SHR(SHR),
+pub trait Instruction : Parsable + IntoBytes {
 }
 
 struct Label { name: String }
-
+impl Instruction for Label {}
 struct NOP;
-
+impl Instruction for NOP {}
 struct MOV(Register, Value);
-
-struct LDW(Register, Value);
-
-struct STW(Register, Value);
-
+impl Instruction for MOV {}
+struct LDW(Register, Address);
+impl Instruction for LDW {}
+struct STW(Register, Address);
+impl Instruction for STW {}
 struct LDA(Address);
-
+impl Instruction for LDA {}
 struct PSH(Value);
-
+impl Instruction for PSH {}
 struct POP(Register);
-
+impl Instruction for POP {}
 struct JMP(Flag, Address);
-
+impl Instruction for JMP {}
 struct ADD(Register, Value);
-
+impl Instruction for ADD {}
 struct SUB(Register, Value);
-
+impl Instruction for SUB {}
 struct AND(Register, Value);
-
-struct OR(Register, Value);
-
+impl Instruction for AND {}
+struct OR (Register, Value);
+impl Instruction for OR {}
 struct INV(Register);
-
+impl Instruction for INV {}
 struct CMP(Register, Value);
-
+impl Instruction for CMP {}
 struct SHL(Register, Value);
-
+impl Instruction for SHL {}
 struct SHR(Register, Value);
+impl Instruction for SHR {}
 
-struct AssemblyProgram {
-    instructions: Vec<Instruction>
-}
+struct AssemblyProgram(Vec<dyn Instruction>);

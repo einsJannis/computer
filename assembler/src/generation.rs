@@ -1,271 +1,358 @@
-use core::panicking::panic;
-use crate::{Address, AddressValue, AssemblyProgram, Flag, Instruction, Register, Value};
+use crate::{ADD, Address, AddressValue, AND, AssemblyProgram, CMP, Instruction, INV, JMP, Label, LDA, LDW, MOV, NOP, OR, Parsable, POP, PSH, Register, SHL, SHR, STW, SUB, Value};
 
-pub trait IntoCode {
-    fn code(self, program: &AssemblyProgram) -> u8;
+trait OpCode {
+    fn op_code() -> u8;
 }
 
-pub trait IntoBytes {
-    fn bytes(self, program: &AssemblyProgram) -> &[u8];
-    fn size(&self) -> usize;
-}
-
-impl IntoCode for Register {
-    fn code(self, _: &AssemblyProgram) -> u8 {
-        match self {
-            Register::NUMBERED(n) => n,
-            Register::HIGH => 2,
-            Register::LOW => 3,
-            Register::PC_HIGH => 4,
-            Register::PC_LOW => 5,
-            Register::STACK_PTR => 6,
-            Register::FLAG => 7
-        }
-    }
-}
-
-impl IntoCode for Value {
-    fn code(self, _: &AssemblyProgram) -> u8 {
-        match self {
-            Value::Register(register) => register.code(),
-            Value::Literal(value) => value as u8
-        }
-    }
-}
-
-impl IntoBytes for AddressValue {
-    fn bytes(self, program: &AssemblyProgram) -> &[u8] {
-        & match self {
-            AddressValue::Literal(value) => [(value >> 8) as u8, value as u8],
-            AddressValue::Label(name) => todo!()
-        }
-    }
-    fn size(&self) -> usize { 2 }
-}
-
-impl IntoBytes for Address {
-    fn bytes(self, program: &AssemblyProgram) -> &[u8] {
-        & match self {
-            Address::HL => [],
-            Address::Value(value) => value.bytes()
-        }
-    }
-    fn size(&self) -> usize {
-        match self {
-            Address::HL => 0,
-            Address::Value(value) => value.size()
-        }
-    }
-}
-
-impl IntoCode for Flag {
-    fn code(self, program: &AssemblyProgram) -> u8 {
-        match self {
-            Flag::NUMBERED(n) => n,
-            Flag::HALT => 0,
-            Flag::CARRY => 1,
-            Flag::BORROW => 2,
-            Flag::OVERFLOW => 3,
-            Flag::LESS => 4,
-            Flag::EQUAL => 5,
-        }
-    }
-}
-
-trait InstructionFlag {
+trait Flag {
     fn flag(&self) -> u8;
 }
 
-impl InstructionFlag for Instruction {
-    fn flag(&self) -> u8 {
-        (match self {
-            Instruction::LABEL(_) => panic!(),
-            Instruction::NOP => 0,
-            Instruction::MOV(_, value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-            Instruction::LDW(_, address) => match address {
-                Address::HL => 0,
-                Address::Value(_) => 1
-            }
-            Instruction::STW(_, address) => match address {
-                Address::HL => 0,
-                Address::Value(_) => 1
-            }
-            Instruction::LDA(address) => match address {
-                Address::HL => 0,
-                Address::Value(_) => 1
-            }
-            Instruction::PSH(value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-            Instruction::POP(_) => 0,
-            Instruction::JMP(_, address) => match address {
-                Address::HL => 0,
-                Address::Value(_) => 1
-            }
-            Instruction::ADD(_, value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-            Instruction::SUB(_, value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-            Instruction::AND(_, value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-            Instruction::OR(_, value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-            Instruction::INV(_) => 0,
-            Instruction::CMP(_, value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-            Instruction::SHL(_, value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-            Instruction::SHR(_, value) => match value {
-                Value::Register(_) => 0,
-                Value::Literal(_) => 1
-            }
-        }) << 3
-    }
+pub trait IntoBytes {
+    type Context;
+    fn as_bytes(&self, context: Self::Context) -> &[u8];
+    fn byte_size(&self) -> usize;
 }
 
-impl IntoCode for Instruction {
-    fn code(&self, program: &AssemblyProgram) -> u8 {
-        (match self {
-            Instruction::LABEL(_) => panic!(),
-            Instruction::NOP => 0x0,
-            Instruction::MOV(_, _) => 0x1,
-            Instruction::LDW(_, _) => 0x2,
-            Instruction::STW(_, _) => 0x3,
-            Instruction::LDA(_) => 0x4,
-            Instruction::PSH(_) => 0x5,
-            Instruction::POP(_) => 0x6,
-            Instruction::JMP(_, _) => 0x7,
-            Instruction::ADD(_, _) => 0x8,
-            Instruction::SUB(_, _) => 0x9,
-            Instruction::AND(_, _) => 0xA,
-            Instruction::OR(_, _) => 0xB,
-            Instruction::INV(_) => 0xC,
-            Instruction::CMP(_, _) => 0xD,
-            Instruction::SHL(_, _) => 0xE,
-            Instruction::SHR(_, _) => 0xF,
-        }) << 4
+impl IntoBytes for Register {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        &[self.0]
     }
+    fn byte_size(&self) -> usize { 1 }
 }
 
-impl IntoBytes for Instruction {
-    fn bytes(self, program: &AssemblyProgram) -> &[u8] {
-        & match self {
-            Instruction::LABEL(_) => [],
-            Instruction::NOP => [self.code(program)],
-            Instruction::MOV(register, value) =>
-                [self.code()|self.flag()|register.code(program),value.code(program)],
-            Instruction::LDW(register, address) => match address {
-                Address::HL => [self.code()|self.flag()|register.code(program)],
-                Address::Value(address) => {
-                    let address = address.bytes(program);
-                    [self.code()|self.flag()|register.code(),address[0],address[1]]
-                }
-            },
-            Instruction::STW(register, address) => match address {
-                Address::HL => [self.code()|self.flag()|register.code(program)],
-                Address::Value(address) => {
-                    let address = address.bytes(program);
-                    [self.code()|self.flag()|register.code(),address[0],address[1]]
-                }
-            },
-            Instruction::LDA(address) => match address {
-                Address::HL => [self.code()],
-                Address::Value(address) => {
-                    let address = address.bytes(program);
-                    [self.code()|self.flag(),address[0],address[1]]
-                }
-            }
-            Instruction::PSH(value) => [self.code()|self.flag(),value.code()],
-            Instruction::POP(register) => [self.code()|self.flag()|register.code()],
-            Instruction::JMP(flag, address) => match address {
-                Address::HL => [self.code()|self.flag()|flag.code()],
-                Address::Value(address) => {
-                    let address = address.bytes();
-                    [self.code()|self.flag()|flag.code(), address[0], address[1]]
-                }
-            }
-            Instruction::ADD(register, value) =>
-                [self.code()|self.flag()|register.code(),value.code()],
-            Instruction::SUB(register, value) =>
-                [self.code()|self.flag()|register.code(),value.code()],
-            Instruction::AND(register, value) =>
-                [self.code()|self.flag()|register.code(),value.code()],
-            Instruction::OR(register, value) =>
-                [self.code()|self.flag()|register.code(),value.code()],
-            Instruction::INV(register) =>
-                [self.code()|self.flag()|register.code()],
-            Instruction::CMP(register, value) =>
-                [self.code()|self.flag()|register.code(),value.code()],
-            Instruction::SHL(register, value) =>
-                [self.code()|self.flag()|register.code(),value.code()],
-            Instruction::SHR(register, value) =>
-                [self.code()|self.flag()|register.code(),value.code()],
-        }
-    }
-    fn size(&self) -> usize {
+impl IntoBytes for Value {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
         match self {
-            Instruction::LABEL(_) => 0,
-            Instruction::NOP => 1,
-            Instruction::MOV(_, _) => 2,
-            Instruction::LDW(_, address) => match address {
-                Address::HL => 1,
-                Address::Value(_) => 3
-            },
-            Instruction::STW(_, address) => match address {
-                Address::HL => 1,
-                Address::Value(_) => 3
-            },
-            Instruction::LDA(address) => match address {
-                Address::HL => 1,
-                Address::Value(_) => 3
-            },
-            Instruction::PSH(_) => 2,
-            Instruction::POP(_) => 1,
-            Instruction::JMP(_, address) => match address {
-                Address::HL => 1,
-                Address::Value(_) => 3
-            }
-            Instruction::ADD(_, _) => 2,
-            Instruction::SUB(_, _) => 2,
-            Instruction::AND(_, _) => 2,
-            Instruction::OR(_, _) => 2,
-            Instruction::INV(_) => 1,
-            Instruction::CMP(_, _) => 2,
-            Instruction::SHL(_, _) => 2,
-            Instruction::SHR(_, _) => 2,
+            Value::Register(register) => register.as_bytes(context),
+            Value::Literal(value) => &[value as u8]
         }
     }
+    fn byte_size(&self) -> usize { 1 }
 }
 
-impl AssemblyProgram {
-    pub fn bytes(self) -> &[u8] {
-        let mut result: Vec<&[u8]> = vec![];
-        for instruction in self.instructions {
-            result += instruction.bytes(&self)
+impl IntoBytes for AddressValue {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        match self {
+            AddressValue::Literal(value) => &[(value >> 8) as u8, (value & 0b11111111) as u8],
+            AddressValue::Label(name) => {
+                todo!()
+            }
         }
-        result.concat().as_slice()
     }
-    pub fn size(&self) -> usize {
-        let mut result = 0;
-        for instruction in self.instructions {
-            result += instruction.size()
+    fn byte_size(&self) -> usize { 2 }
+}
+
+impl IntoBytes for crate::Flag {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] { &[self.0] }
+    fn byte_size(&self) -> usize { 1 }
+}
+
+impl IntoBytes for Label {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] { &[] }
+    fn byte_size(&self) -> usize { 0 }
+}
+
+impl OpCode for NOP {
+    fn op_code() -> u8 { 0 }
+}
+
+impl Flag for NOP {
+    fn flag(&self) -> u8 { 0 }
+}
+
+impl IntoBytes for NOP {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] { &[Self::op_code() | self.flag()] }
+    fn byte_size(&self) -> usize { 1 }
+}
+
+impl OpCode for MOV {
+    fn op_code() -> u8 { 0x1 << 4 }
+}
+
+impl InstructionReg for MOV {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionVal for MOV {
+    fn val(&self) -> &Value { &self.1 }
+}
+
+impl OpCode for LDW {
+    fn op_code() -> u8 { 0x2 << 4 }
+}
+
+impl InstructionReg for LDW {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionAddr for LDW {
+    fn addr(&self) -> &Address { &self.1 }
+}
+
+impl OpCode for STW {
+    fn op_code() -> u8 { 0x3 << 4 }
+}
+
+impl InstructionReg for STW {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionAddr for STW {
+    fn addr(&self) -> &Address { &self.1 }
+}
+
+impl OpCode for LDA {
+    fn op_code() -> u8 { 0x4 << 4 }
+}
+
+impl InstructionAddr for LDA {
+    fn addr(&self) -> &Address { &self.0 }
+}
+
+impl IntoBytes for LDA {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        match self.addr() {
+            Address::HL => &[Self::op_code() | self.flag()],
+            Address::Literal(address) => {
+                let address = address.as_bytes(context);
+                &[Self::op_code() | self.flag(), address[0], address[1]]
+            }
         }
-        result
+    }
+    fn byte_size(&self) -> usize { match address { Address::HL => 1, _ => 3 } }
+}
+
+impl OpCode for PSH {
+    fn op_code() -> u8 { 0x5 << 4 }
+}
+
+impl InstructionVal for PSH {
+    fn val(&self) -> &Value { &self.0 }
+}
+
+impl IntoBytes for PSH {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        &[Self::op_code() | self.flag(), self.val().as_bytes(context)]
+    }
+    fn byte_size(&self) -> usize { 2 }
+}
+
+impl OpCode for POP {
+    fn op_code() -> u8 { 0x6 << 4 }
+}
+
+impl InstructionReg for POP {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl IntoBytes for POP {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        &[Self::op_code() | self.reg().as_bytes()]
+    }
+    fn byte_size(&self) -> usize { 1 }
+}
+
+impl OpCode for JMP {
+    fn op_code() -> u8 { 0x7 << 4 }
+}
+
+impl JMP {
+    fn flag_arg(&self) -> &crate::Flag { &self.0 }
+}
+
+impl InstructionAddr for JMP {
+    fn addr(&self) -> &Address { &self.1 }
+}
+
+impl IntoBytes for JMP {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        match self.addr() {
+            Address::HL => &[Self::op_code() | self.flag() | self.flag_arg()],
+            Address::Literal(address) => {
+                let address = address.as_bytes(context);
+                &[Self::op_code() | self.flag() | self.flag_arg(), address[0], address[1]]
+            }
+        }
+    }
+    fn byte_size(&self) -> usize { match self.addr() { Address::HL => 0, _ => 1 } }
+}
+
+impl OpCode for ADD {
+    fn op_code() -> u8 { 0x8 << 4 }
+}
+
+impl InstructionReg for ADD {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionVal for ADD {
+    fn val(&self) -> &Value { &self.1 }
+}
+
+impl OpCode for SUB {
+    fn op_code() -> u8 { 0x9 << 4 }
+}
+
+impl InstructionReg for SUB {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionVal for SUB {
+    fn val(&self) -> &Value { &self.1 }
+}
+
+impl OpCode for AND {
+    fn op_code() -> u8 { 0xA << 4 }
+}
+
+impl InstructionReg for AND {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionVal for AND {
+    fn val(&self) -> &Value { &self.1 }
+}
+
+impl OpCode for OR {
+    fn op_code() -> u8 { 0xB << 4 }
+}
+
+impl InstructionReg for OR {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionVal for OR {
+    fn val(&self) -> &Value { &self.1 }
+}
+
+impl OpCode for INV {
+    fn op_code() -> u8 { 0xC << 4 }
+}
+
+impl InstructionReg for INV {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl IntoBytes for INV {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        &[Self::op_code() | self.flag(), self.val().as_bytes(context)]
+    }
+    fn byte_size(&self) -> usize { 2 }
+}
+
+impl OpCode for CMP {
+    fn op_code() -> u8 { 0xD << 4 }
+}
+
+impl InstructionReg for CMP {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionVal for CMP {
+    fn val(&self) -> &Value { &self.1 }
+}
+
+impl OpCode for SHL {
+    fn op_code() -> u8 { 0xE << 4 }
+}
+
+impl InstructionReg for SHL {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionVal for SHL {
+    fn val(&self) -> &Value { &self.1 }
+}
+
+impl OpCode for SHR {
+    fn op_code() -> u8 { 0xF << 4 }
+}
+
+impl InstructionReg for SHR {
+    fn reg(&self) -> &Register { &self.0 }
+}
+
+impl InstructionVal for SHR {
+    fn val(&self) -> &Value { &self.1 }
+}
+
+trait InstructionReg: OpCode + Instruction {
+    fn reg(&self) -> &Register;
+}
+
+trait FirstByte: InstructionReg {
+    fn first_byte(&self) -> u8;
+}
+
+impl<T> FirstByte for T where T: InstructionReg {
+    fn first_byte(&self) -> u8 { Self::op_code() | self.flag() | self.reg().as_bytes()[0] }
+}
+
+trait InstructionAddr: OpCode + Instruction {
+    fn addr(&self) -> &Address;
+}
+
+trait InstructionRegAddr: InstructionReg + InstructionAddr {}
+
+impl<T> InstructionRegAddr for T where T: InstructionReg + InstructionAddr {}
+
+trait InstructionVal: OpCode + Instruction {
+    fn val(&self) -> &Value;
+}
+
+trait InstructionRegVal: InstructionReg + InstructionVal {}
+
+impl<T> InstructionRegVal for T where T: InstructionReg + InstructionVal {}
+
+impl<T> Flag for T where T: InstructionAddr {
+    fn flag(&self) -> u8 { (match self.addr() { Address::HL => 0, _ => 1 }) << 3 }
+}
+
+impl<T> Flag for T where T: InstructionVal {
+    fn flag(&self) -> u8 { (match self.val() { Value::Literal(_) => 0, _ => 1 }) << 3 }
+}
+
+impl<T> IntoBytes for T where T: InstructionRegAddr {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        match self.addr() {
+            Address::HL =>
+                &[self.first_byte()],
+            Address::Literal(address) => {
+                let address = address.as_bytes(context);
+                &[self.first_byte(), address[0], address[1]]
+            }
+        }
+    }
+    fn byte_size(&self) -> usize { match self.addr() { Address::HL => 1, _ => 3 } }
+}
+
+impl<T> IntoBytes for T where T: InstructionRegVal {
+    type Context = AssemblyProgram;
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        &[self.first_byte(), self.val().as_bytes(context)[0]]
+    }
+    fn byte_size(&self) -> usize { 2 }
+}
+
+impl IntoBytes for AssemblyProgram {
+    type Context = ();
+    fn as_bytes(&self, context: Self::Context) -> &[u8] {
+        self.0.iter().map(|it| it.as_bytes(self)).collect().concat()
+    }
+    fn byte_size(&self) -> usize {
+        self.0.iter().map(|it| it.byte_size()).sum()
     }
 }
