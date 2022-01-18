@@ -1,4 +1,6 @@
-use crate::{ADD, Address, AddressValue, AND, AssemblyProgram, CMP, Instruction, INV, JMP, Label, LDA, LDW, MOV, NOP, OR, Parsable, POP, PSH, Register, SHL, SHR, STW, SUB, Value};
+use std::any::{Any, TypeId};
+use crate::{ADD, Address, AddressValue, AND, AssemblyProgram, CMP, Instruction, INV, JMP, Label,
+            LDA, LDW, MOV, NOP, OR, Parsable, POP, PSH, Register, SHL, SHR, STW, SUB, Value};
 
 trait OpCode {
     fn op_code() -> u8;
@@ -39,7 +41,14 @@ impl IntoBytes for AddressValue {
         match self {
             AddressValue::Literal(value) => &[(value >> 8) as u8, (value & 0b11111111) as u8],
             AddressValue::Label(name) => {
-                todo!()
+                let x = context.0.iter().enumerate().find(|(_, it)| {
+                    if it.type_id() == TypeId::of::<Label>() {
+                        (it as Label).name == name
+                    } else { false }
+                })?.0;
+                AddressValue::Literal(
+                    context.0.get(..x)?.iter().map(|it| it.byte_size()).sum()
+                ).as_bytes(context)
             }
         }
     }
