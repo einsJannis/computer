@@ -151,6 +151,7 @@ impl<T> ParseInstructionWord for T where T: InstructionWord {
 impl<T> Parsable for T where T: With1Args + ParseInstructionWord {
     fn parse(tokens: &mut TokenIterator) -> Result<(ContentLocation, Self), ParseError> {
         let content_location = Self::parse_instruction_word(tokens)?;
+        parse_token(tokens, " ")?;
         let arg0 = <Self as WithArg0>::Output::parse(tokens)?.1;
         return Ok((content_location, Self::new(arg0)))
     }
@@ -159,7 +160,9 @@ impl<T> Parsable for T where T: With1Args + ParseInstructionWord {
 impl<T> Parsable for T where T: With2Args + ParseInstructionWord {
     fn parse(tokens: &mut TokenIterator) -> Result<(ContentLocation, Self), ParseError> {
         let content_location = Self::parse_instruction_word(tokens)?;
+        parse_token(tokens, " ")?;
         let arg0 = <Self as WithArg0>::Output::parse(tokens)?.1;
+        parse_token(tokens, " ")?;
         let arg1 = <Self as WithArg1>::Output::parse(tokens)?.1;
         return Ok((content_location, Self::new(arg0, arg1)))
     }
@@ -176,65 +179,33 @@ impl Parsable for NOP {
     }
 }
 
-impl InstructionWord for MOV {
-    fn instruction_word() -> &str { "mov" }
+macro_rules! instruction_words {
+    ($($struct:expr,$string:expr),*) => {
+        $(
+            impl InstructionWord for $struct {
+                fn instruction_word() -> &str { $string }
+            }
+        )*
+    };
 }
 
-impl InstructionWord for LDW {
-    fn instruction_word() -> &str { "ldw" }
-}
-
-impl InstructionWord for STW {
-    fn instruction_word() -> &str { "stw" }
-}
-
-impl InstructionWord for LDA {
-    fn instruction_word() -> &str { "lda" }
-}
-
-impl InstructionWord for PSH {
-    fn instruction_word() -> &str { "psh" }
-}
-
-impl InstructionWord for POP {
-    fn instruction_word() -> &str { "pop" }
-}
-
-impl InstructionWord for JMP {
-    fn instruction_word() -> &str { "jmp" }
-}
-
-impl InstructionWord for ADD {
-    fn instruction_word() -> &str { "add" }
-}
-
-impl InstructionWord for SUB {
-    fn instruction_word() -> &str { "sub" }
-}
-
-impl InstructionWord for AND {
-    fn instruction_word() -> &str { "and" }
-}
-
-impl InstructionWord for OR {
-    fn instruction_word() -> &str { "or" }
-}
-
-impl InstructionWord for INV {
-    fn instruction_word() -> &str { "inv" }
-}
-
-impl InstructionWord for CMP {
-    fn instruction_word() -> &str { "cmp" }
-}
-
-impl InstructionWord for SHL {
-    fn instruction_word() -> &str { "add" }
-}
-
-impl InstructionWord for SHR {
-    fn instruction_word() -> &str { "shr" }
-}
+instruction_words!(
+    MOV, "mov",
+    LDW, "ldw",
+    STW, "stw",
+    LDA, "ldw",
+    PSH, "psh",
+    POP, "pop",
+    JMP, "jmp",
+    ADD, "add",
+    SUB, "sub",
+    AND, "and",
+    OR , "or" ,
+    INV, "inv",
+    CMP, "cmp",
+    SHL, "shl",
+    SHR, "shr"
+);
 
 macro_rules! parse_instruction_m {
     ($tokens:expr,$head:expr,$($tail:expr),*) => {
@@ -262,7 +233,15 @@ impl Parsable for AssemblyProgram {
                     _ => return Err(err)
                 }
             }
+            match parse_token(tokens, "\n") {
+                Err(err) => match err {
+                    ParseError::NoTokensLeft => {},
+                    _ => return Err(err)
+                }
+                _ => {}
+            }
         }
         return Ok((content_location.ok_or(|| ParseError::NoTokensLeft)?, AssemblyProgram(result)))
     }
 }
+
