@@ -2,7 +2,7 @@ use std::process::Output;
 use std::str::FromStr;
 use rpc::{ContentLocation, WithContentLocation};
 use rpc::lexer::{TokenIterator, Token};
-use crate::{LDA, LDW, MOV, NOP, Register, STW, Value, With2Args, WithArg0, WithArg1};
+use crate::{ADD, AND, AssemblyProgram, CMP, Flag, Instruction, INV, JMP, LDA, LDW, MOV, NOP, OR, POP, PSH, Register, SHL, SHR, STW, SUB, Value, With1Args, With2Args, WithArg0, WithArg1};
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -97,6 +97,30 @@ impl Parsable for Value {
     }
 }
 
+impl Parsable for Flag {
+    fn parse(tokens: &mut TokenIterator) -> Result<(ContentLocation, Self), ParseError> {
+        tokens.push();
+        let next = tokens.next().ok_or(ParseError::NoTokensLeft)?;
+        fn map_error(_: ParseError) -> ParseError {
+            ParseError::FailedToMatchPattern {
+                location: next.content_location(),
+                pattern_name: "flag".to_string()?
+            }
+        }
+        if next == "f" {
+            parse_token(tokens, "l").map_err(map_error);
+            parse_token(tokens, "a").map_err(map_error);
+            parse_token(tokens, "g").map_err(map_error);
+            let num_token = tokens.next().ok_or(ParseError::NoTokensLeft)?;
+            Ok((next.content_location(), Flag(u8::from_str(num_token.value().as_str())?)))
+            //TODO: impl aliases
+        } else { Err(ParseError::FailedToMatchPattern {
+            location: next.content_location(),
+            pattern_name: "register".to_string()
+        }) }
+    }
+}
+
 trait ParseInstructionWord {
     fn parse_instruction_word(tokens: &mut TokenIterator) -> Result<ContentLocation, ParseError>;
 }
@@ -124,8 +148,16 @@ impl<T> ParseInstructionWord for T where T: InstructionWord {
     }
 }
 
+impl<T> Parsable for T where T: With1Args + ParseInstructionWord {
+    fn parse(tokens: &mut TokenIterator) -> Result<(ContentLocation, Self), ParseError> {
+        let content_location = Self::parse_instruction_word(tokens)?;
+        let arg0 = <Self as WithArg0>::Output::parse(tokens)?.1;
+        return Ok((content_location, Self::new(arg0)))
+    }
+}
+
 impl<T> Parsable for T where T: With2Args + ParseInstructionWord {
-    fn parse(tokens: &mut TokenIterator) -> Result<Self, ParseError> {
+    fn parse(tokens: &mut TokenIterator) -> Result<(ContentLocation, Self), ParseError> {
         let content_location = Self::parse_instruction_word(tokens)?;
         let arg0 = <Self as WithArg0>::Output::parse(tokens)?.1;
         let arg1 = <Self as WithArg1>::Output::parse(tokens)?.1;
@@ -162,4 +194,75 @@ impl InstructionWord for LDA {
 
 impl InstructionWord for PSH {
     fn instruction_word() -> &str { "psh" }
+}
+
+impl InstructionWord for POP {
+    fn instruction_word() -> &str { "pop" }
+}
+
+impl InstructionWord for JMP {
+    fn instruction_word() -> &str { "jmp" }
+}
+
+impl InstructionWord for ADD {
+    fn instruction_word() -> &str { "add" }
+}
+
+impl InstructionWord for SUB {
+    fn instruction_word() -> &str { "sub" }
+}
+
+impl InstructionWord for AND {
+    fn instruction_word() -> &str { "and" }
+}
+
+impl InstructionWord for OR {
+    fn instruction_word() -> &str { "or" }
+}
+
+impl InstructionWord for INV {
+    fn instruction_word() -> &str { "inv" }
+}
+
+impl InstructionWord for CMP {
+    fn instruction_word() -> &str { "cmp" }
+}
+
+impl InstructionWord for SHL {
+    fn instruction_word() -> &str { "add" }
+}
+
+impl InstructionWord for SHR {
+    fn instruction_word() -> &str { "shr" }
+}
+
+macro_rules! parse_instruction_m {
+    ($tokens:expr,$head:expr,$($tail:expr),*) => {
+        $head::parse($tokens).map(|it| it as (ContentLocation, &dyn Instruction))
+            $(.or_else(|_| $tail::parse($tokens).map(|it| it as (ContentLocation, &dyn Instruction))))*
+    };
+}
+
+impl Parsable for AssemblyProgram {
+    fn parse(tokens: &mut TokenIterator) -> Result<(ContentLocation, Self), ParseError> {
+        let mut content_location: Option<ContentLocation> = None;
+        let mut result: Vec<&dyn Instruction> = vec![];
+        loop {
+            let next =
+                parse_instruction_m!(tokens, NOP, MOV, LDW, STW, LDA, PSH, POP, JMP, ADD, SUB, AND, OR, INV, CMP, SHL, SHR);
+            match next {
+                Ok(instruction) => {
+                    if let None() = content_location {
+                        content_location = Some(instruction.0)
+                    }
+                    result += instruction.1
+                },
+                Err(err) => match err {
+                    ParseError::NoTokensLeft => break,
+                    _ => return Err(err)
+                }
+            }
+        }
+        return Ok((content_location.ok_or(|| ParseError::NoTokensLeft)?, AssemblyProgram(result)))
+    }
 }

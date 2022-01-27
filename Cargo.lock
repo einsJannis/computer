@@ -5,7 +5,15 @@ version = 3
 [[package]]
 name = "assembler"
 version = "0.1.0"
+dependencies = [
+ "rpc",
+]
 
 [[package]]
 name = "computer_emulator"
 version = "0.1.0"
+
+[[package]]
+name = "rpc"
+version = "0.1.0"
+source = "git+https://github.com/einsjannis/rpc#26c908f5a95f1924e0bb660af5e7cf8e81cf4f40"

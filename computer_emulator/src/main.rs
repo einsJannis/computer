@@ -1,5 +1,4 @@
 use std::intrinsics::unreachable;
-use panic_abort::personalities::rust_eh_personality;
 use crate::register::{HIGH, PC_H};
 
 fn main() {
