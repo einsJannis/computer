@@ -1,5 +1,7 @@
 use crate::parser::Parsable;
-use crate::{Flag, Register, Instruction, RelativeProgram, Register, With2Args, WithArg1, WithArg0};
+use crate::{Flag, Register, Instruction, Register, With2Args, WithArg1, WithArg0};
+
+mod parser;
 
 pub trait RelativeInstructionType {
     type Output: Instruction + Sized;

@@ -1,5 +1,4 @@
 use crate::parser::Parsable;
-use crate::ExpandableProgram;
 use crate::relative::RelativeInstruction;
 
 pub trait ExpandableInstruction: Parsable {
@@ -11,3 +10,4 @@ impl<T> ExpandableInstruction for T where T: RelativeInstruction {
 }
 
 struct ExpandableProgram(Vec<dyn ExpandableInstruction>);
+
