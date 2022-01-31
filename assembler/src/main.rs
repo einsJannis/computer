@@ -8,6 +8,7 @@ mod parser;
 mod generator;
 mod relative;
 mod expandable;
+mod macros;
 
 struct Register(u8);
 
